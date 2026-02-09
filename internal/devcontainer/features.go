@@ -354,8 +354,13 @@ func (r *featureResolver) fetchAndParse(ctx context.Context, reference FeatureRe
 	if err != nil {
 		return nil, err
 	}
-	if err := validateFeatureMetadata(metadata, featureDir); err != nil {
+	if err := validateFeatureMetadata(metadata); err != nil {
 		return nil, err
+	}
+	if reference.Source == FeatureSourceLocal {
+		if err := validateFeatureDirName(metadata.ID, featureDir); err != nil {
+			return nil, err
+		}
 	}
 	resolvedOptions, err := resolveFeatureOptions(metadata.Options, options)
 	if err != nil {
@@ -387,12 +392,9 @@ func readFeatureMetadata(featureDir string) (FeatureMetadata, error) {
 	return metadata, nil
 }
 
-func validateFeatureMetadata(metadata FeatureMetadata, featureDir string) error {
+func validateFeatureMetadata(metadata FeatureMetadata) error {
 	if metadata.ID == "" || metadata.Version == "" || metadata.Name == "" {
 		return errors.New("devcontainer-feature.json requires id, version, and name")
-	}
-	if err := validateFeatureDirName(metadata.ID, featureDir); err != nil {
-		return err
 	}
 	return nil
 }

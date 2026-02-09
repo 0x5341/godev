@@ -232,6 +232,83 @@ func TestDockerEngine_FeaturesOCI(t *testing.T) {
 	}
 }
 
+func TestDockerEngine_FeaturesGHCR(t *testing.T) {
+	cli := requireDocker(t)
+	pre := countDockerResources(t, cli)
+	containerID := ""
+	featuresImage := ""
+	baseImage := "debian:bookworm-slim"
+	removeBaseImage := false
+	t.Cleanup(func() {
+		cleanupContainer(t, cli, containerID)
+		cleanupImage(t, cli, featuresImage)
+		if removeBaseImage {
+			cleanupImage(t, cli, baseImage)
+		}
+	})
+
+	root := t.TempDir()
+	copyTestcaseDir(t, root, "features", "ghcr-go")
+	configPath := filepath.Join(root, ".devcontainer", "devcontainer.json")
+
+	cfg, err := LoadConfig(configPath)
+	if err != nil {
+		t.Fatalf("LoadConfig: %v", err)
+	}
+	workspaceRoot, _, _, vars, err := resolveWorkspacePaths(configPath, cfg)
+	if err != nil {
+		t.Fatalf("resolveWorkspacePaths: %v", err)
+	}
+	features, err := resolveFeatures(context.Background(), configPath, workspaceRoot, cfg)
+	if err != nil {
+		t.Fatalf("resolveFeatures: %v", err)
+	}
+	if features != nil {
+		featuresImage = featuresImageTag(workspaceRoot, vars["devcontainerId"], features.Order)
+	}
+
+	inspectCtx, cancelInspect := context.WithTimeout(context.Background(), 10*time.Second)
+	if _, err := cli.ImageInspect(inspectCtx, baseImage); err != nil {
+		removeBaseImage = true
+	}
+	cancelInspect()
+
+	startCtx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	defer cancel()
+	containerID, err = StartDevcontainer(startCtx, WithConfigPath(configPath))
+	if err != nil {
+		t.Fatalf("StartDevcontainer: %v", err)
+	}
+
+	output := execContainer(t, cli, containerID, []string{"/usr/local/go/bin/go", "version"})
+	if !strings.HasPrefix(strings.TrimSpace(output), "go version") {
+		t.Fatalf("unexpected go version output: %s", output)
+	}
+
+	if err := StopDevcontainer(context.Background(), containerID, 10*time.Second); err != nil {
+		t.Fatalf("StopDevcontainer: %v", err)
+	}
+	if err := RemoveDevcontainer(context.Background(), containerID); err != nil {
+		t.Fatalf("RemoveDevcontainer: %v", err)
+	}
+	containerID = ""
+	cleanupImage(t, cli, featuresImage)
+	featuresImage = ""
+	if removeBaseImage {
+		cleanupImage(t, cli, baseImage)
+	}
+	post := countDockerResources(t, cli)
+	if post.containers > pre.containers {
+		t.Fatalf("container count increased: %d -> %d", pre.containers, post.containers)
+	}
+	if post.images > pre.images {
+		t.Fatalf("image count increased: %d -> %d", pre.images, post.images)
+	}
+	if post.volumes > pre.volumes {
+		t.Fatalf("volume count increased: %d -> %d", pre.volumes, post.volumes)
+	}
+}
+
 func execContainer(t *testing.T, cli *client.Client, containerID string, cmd []string) string {
 	t.Helper()
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
