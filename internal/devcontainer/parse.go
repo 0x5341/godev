@@ -6,7 +6,6 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"net/netip"
 	"os"
 	"path"
 	"path/filepath"
@@ -15,9 +14,8 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/docker/docker/api/types/mount"
 	"github.com/docker/go-connections/nat"
-	"github.com/moby/moby/api/types/mount"
-	"github.com/moby/moby/api/types/network"
 )
 
 func stripJSONComments(input []byte) ([]byte, error) {
@@ -257,7 +255,7 @@ func normalizePortSpec(spec string) (string, error) {
 	return fmt.Sprintf("%s:%s/%s", port, port, proto), nil
 }
 
-func parsePortSpecs(specs []string) (network.PortSet, network.PortMap, error) {
+func parsePortSpecs(specs []string) (nat.PortSet, nat.PortMap, error) {
 	if len(specs) == 0 {
 		return nil, nil, nil
 	}
@@ -265,36 +263,7 @@ func parsePortSpecs(specs []string) (network.PortSet, network.PortMap, error) {
 	if err != nil {
 		return nil, nil, err
 	}
-	exposedPorts := make(network.PortSet, len(exposed))
-	for port := range exposed {
-		parsed, err := network.ParsePort(string(port))
-		if err != nil {
-			return nil, nil, err
-		}
-		exposedPorts[parsed] = struct{}{}
-	}
-	portBindings := make(network.PortMap, len(bindings))
-	for port, portBinding := range bindings {
-		parsed, err := network.ParsePort(string(port))
-		if err != nil {
-			return nil, nil, err
-		}
-		for _, binding := range portBinding {
-			var hostIP netip.Addr
-			if binding.HostIP != "" {
-				parsedIP, err := netip.ParseAddr(binding.HostIP)
-				if err != nil {
-					return nil, nil, err
-				}
-				hostIP = parsedIP
-			}
-			portBindings[parsed] = append(portBindings[parsed], network.PortBinding{
-				HostIP:   hostIP,
-				HostPort: binding.HostPort,
-			})
-		}
-	}
-	return exposedPorts, portBindings, nil
+	return exposed, bindings, nil
 }
 
 func parseMountString(spec string) (mount.Mount, error) {

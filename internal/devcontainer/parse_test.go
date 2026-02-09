@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/moby/moby/api/types/mount"
+	"github.com/docker/docker/api/types/mount"
 )
 
 func TestExpandVariables(t *testing.T) {

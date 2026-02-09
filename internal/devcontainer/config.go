@@ -9,22 +9,26 @@ import (
 )
 
 type DevcontainerConfig struct {
-	Name            string             `json:"name"`
-	Image           string             `json:"image"`
-	Build           *DevcontainerBuild `json:"build"`
-	ForwardPorts    PortList           `json:"forwardPorts"`
-	AppPort         PortList           `json:"appPort"`
-	ContainerEnv    map[string]string  `json:"containerEnv"`
-	Mounts          []MountSpec        `json:"mounts"`
-	WorkspaceMount  string             `json:"workspaceMount"`
-	WorkspaceFolder string             `json:"workspaceFolder"`
-	RunArgs         []string           `json:"runArgs"`
-	Privileged      bool               `json:"privileged"`
-	CapAdd          []string           `json:"capAdd"`
-	SecurityOpt     []string           `json:"securityOpt"`
-	Init            *bool              `json:"init"`
-	ContainerUser   string             `json:"containerUser"`
-	OverrideCommand *bool              `json:"overrideCommand"`
+	Name              string             `json:"name"`
+	Image             string             `json:"image"`
+	Build             *DevcontainerBuild `json:"build"`
+	DockerComposeFile StringSlice        `json:"dockerComposeFile"`
+	Service           string             `json:"service"`
+	RunServices       []string           `json:"runServices"`
+	ShutdownAction    string             `json:"shutdownAction"`
+	ForwardPorts      PortList           `json:"forwardPorts"`
+	AppPort           PortList           `json:"appPort"`
+	ContainerEnv      map[string]string  `json:"containerEnv"`
+	Mounts            []MountSpec        `json:"mounts"`
+	WorkspaceMount    string             `json:"workspaceMount"`
+	WorkspaceFolder   string             `json:"workspaceFolder"`
+	RunArgs           []string           `json:"runArgs"`
+	Privileged        bool               `json:"privileged"`
+	CapAdd            []string           `json:"capAdd"`
+	SecurityOpt       []string           `json:"securityOpt"`
+	Init              *bool              `json:"init"`
+	ContainerUser     string             `json:"containerUser"`
+	OverrideCommand   *bool              `json:"overrideCommand"`
 }
 
 type DevcontainerBuild struct {

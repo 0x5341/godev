@@ -80,3 +80,38 @@ func TestLoadConfig_ParsesPortsAndMounts(t *testing.T) {
 		t.Fatalf("unexpected mount spec: %#v", cfg.Mounts)
 	}
 }
+
+func TestLoadConfig_ParsesComposeFields(t *testing.T) {
+	root := t.TempDir()
+	configDir := filepath.Join(root, ".devcontainer")
+	if err := os.MkdirAll(configDir, 0o755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	configPath := filepath.Join(configDir, "devcontainer.json")
+	config := `{
+		"dockerComposeFile": ["compose.yml", "compose.override.yml"],
+		"service": "app",
+		"runServices": ["app", "db"],
+		"workspaceFolder": "/workspace"
+	}`
+	if err := os.WriteFile(configPath, []byte(config), 0o644); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+
+	cfg, err := LoadConfig(configPath)
+	if err != nil {
+		t.Fatalf("LoadConfig: %v", err)
+	}
+	if len(cfg.DockerComposeFile) != 2 || cfg.DockerComposeFile[0] != "compose.yml" || cfg.DockerComposeFile[1] != "compose.override.yml" {
+		t.Fatalf("unexpected dockerComposeFile: %#v", cfg.DockerComposeFile)
+	}
+	if cfg.Service != "app" {
+		t.Fatalf("unexpected service: %q", cfg.Service)
+	}
+	if len(cfg.RunServices) != 2 || cfg.RunServices[0] != "app" || cfg.RunServices[1] != "db" {
+		t.Fatalf("unexpected runServices: %#v", cfg.RunServices)
+	}
+	if cfg.WorkspaceFolder != "/workspace" {
+		t.Fatalf("unexpected workspaceFolder: %q", cfg.WorkspaceFolder)
+	}
+}

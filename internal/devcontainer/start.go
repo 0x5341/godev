@@ -12,10 +12,12 @@ import (
 	"strings"
 	"time"
 
+	"github.com/docker/docker/api/types/build"
+	"github.com/docker/docker/api/types/container"
+	"github.com/docker/docker/api/types/image"
+	"github.com/docker/docker/api/types/mount"
+	"github.com/docker/docker/client"
 	"github.com/docker/go-units"
-	"github.com/moby/moby/api/types/container"
-	"github.com/moby/moby/api/types/mount"
-	"github.com/moby/moby/client"
 )
 
 func StartDevcontainer(ctx context.Context, opts ...StartOption) (string, error) {
@@ -37,6 +39,12 @@ func StartDevcontainer(ctx context.Context, opts ...StartOption) (string, error)
 	cfg, err := LoadConfig(configPath)
 	if err != nil {
 		return "", err
+	}
+	if err := validateConfig(cfg); err != nil {
+		return "", err
+	}
+	if isComposeConfig(cfg) {
+		return startComposeDevcontainer(ctx, configPath, cfg, options)
 	}
 
 	workspaceRoot, workspaceFolder, workspaceMount, vars, err := resolveWorkspacePaths(configPath, cfg)
@@ -151,29 +159,23 @@ func StartDevcontainer(ctx context.Context, opts ...StartOption) (string, error)
 	}
 
 	containerName := resolveContainerName(cfg.Name, workspaceRoot, vars["devcontainerId"])
-	created, err := cli.ContainerCreate(ctx, client.ContainerCreateOptions{
-		Config:     containerConfig,
-		HostConfig: hostConfig,
-		Name:       containerName,
-	})
+	created, err := cli.ContainerCreate(ctx, containerConfig, hostConfig, nil, nil, containerName)
 	if err != nil {
 		return "", err
 	}
 
-	if _, err := cli.ContainerStart(ctx, created.ID, client.ContainerStartOptions{}); err != nil {
+	if err := cli.ContainerStart(ctx, created.ID, container.StartOptions{}); err != nil {
 		return created.ID, err
 	}
 
 	if !options.Detach {
-		waitResult := cli.ContainerWait(ctx, created.ID, client.ContainerWaitOptions{
-			Condition: container.WaitConditionNotRunning,
-		})
+		statusCh, errCh := cli.ContainerWait(ctx, created.ID, container.WaitConditionNotRunning)
 		select {
-		case err := <-waitResult.Error:
+		case err := <-errCh:
 			if err != nil {
 				return created.ID, err
 			}
-		case status := <-waitResult.Result:
+		case status := <-statusCh:
 			if status.StatusCode != 0 {
 				return created.ID, fmt.Errorf("container exited with status %d", status.StatusCode)
 			}
@@ -193,12 +195,10 @@ func StopDevcontainer(ctx context.Context, containerID string, timeout time.Dura
 	}()
 
 	if timeout <= 0 {
-		_, err := cli.ContainerStop(ctx, containerID, client.ContainerStopOptions{})
-		return err
+		return cli.ContainerStop(ctx, containerID, container.StopOptions{})
 	}
 	timeoutSeconds := int(timeout.Seconds())
-	_, err = cli.ContainerStop(ctx, containerID, client.ContainerStopOptions{Timeout: &timeoutSeconds})
-	return err
+	return cli.ContainerStop(ctx, containerID, container.StopOptions{Timeout: &timeoutSeconds})
 }
 
 func RemoveDevcontainer(ctx context.Context, containerID string) error {
@@ -210,17 +210,19 @@ func RemoveDevcontainer(ctx context.Context, containerID string) error {
 		_ = cli.Close()
 	}()
 
-	_, err = cli.ContainerRemove(ctx, containerID, client.ContainerRemoveOptions{
-		Force:         true,
-		RemoveVolumes: true,
-	})
-	return err
+	return cli.ContainerRemove(ctx, containerID, container.RemoveOptions{Force: true, RemoveVolumes: true})
 }
 
 func BuildImageFromDevcontainer(ctx context.Context, configPath string) (string, error) {
 	cfg, err := LoadConfig(configPath)
 	if err != nil {
 		return "", err
+	}
+	if err := validateConfig(cfg); err != nil {
+		return "", err
+	}
+	if isComposeConfig(cfg) {
+		return "", errors.New("docker compose build is not supported")
 	}
 	workspaceRoot, _, _, vars, err := resolveWorkspacePaths(configPath, cfg)
 	if err != nil {
@@ -330,7 +332,7 @@ func buildImage(ctx context.Context, cli *client.Client, cfg *DevcontainerConfig
 		buildArgs[key] = &val
 	}
 
-	resp, err := cli.ImageBuild(ctx, buildContext, client.ImageBuildOptions{
+	resp, err := cli.ImageBuild(ctx, buildContext, build.ImageBuildOptions{
 		Dockerfile: dockerfileRel,
 		Tags:       []string{tag},
 		Remove:     true,
@@ -413,8 +415,8 @@ func tarDirectory(dir string) (io.ReadCloser, error) {
 	return pipeReader, nil
 }
 
-func pullImage(ctx context.Context, cli *client.Client, image string) error {
-	reader, err := cli.ImagePull(ctx, image, client.ImagePullOptions{})
+func pullImage(ctx context.Context, cli *client.Client, imageRef string) error {
+	reader, err := cli.ImagePull(ctx, imageRef, image.PullOptions{})
 	if err != nil {
 		return err
 	}
@@ -500,5 +502,5 @@ func mergeLabels(base, overlay map[string]string) map[string]string {
 }
 
 func newDockerClient() (*client.Client, error) {
-	return client.New(client.FromEnv)
+	return client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
 }
