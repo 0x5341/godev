@@ -4,33 +4,36 @@ import "time"
 
 type StartOption func(*startOptions)
 
+// startOptions holds StartDevcontainer configuration derived from StartOption values.
 type startOptions struct {
-	ConfigPath   string
-	Env          map[string]string
-	ExtraPublish []string
-	ExtraMounts  []Mount
-	RunArgs      []string
-	RemoveOnStop bool
-	Detach       bool
-	TTY          bool
-	Labels       map[string]string
-	Resources    ResourceLimits
-	Network      string
-	Timeout      time.Duration
-	Workdir      string
+	ConfigPath   string            // ConfigPath overrides the devcontainer.json path.
+	Env          map[string]string // Env holds extra environment variables.
+	ExtraPublish []string          // ExtraPublish adds port publish entries.
+	ExtraMounts  []Mount           // ExtraMounts adds extra mount entries.
+	RunArgs      []string          // RunArgs adds raw docker run arguments.
+	RemoveOnStop bool              // RemoveOnStop enables AutoRemove on the container.
+	Detach       bool              // Detach controls whether StartDevcontainer waits.
+	TTY          bool              // TTY controls pseudo-TTY allocation.
+	Labels       map[string]string // Labels adds Docker labels.
+	Resources    ResourceLimits    // Resources configures CPU and memory limits.
+	Network      string            // Network overrides the network mode.
+	Timeout      time.Duration     // Timeout limits the overall start duration.
+	Workdir      string            // Workdir overrides the container working directory.
 }
 
+// Mount describes an extra container mount to apply at start.
 type Mount struct {
-	Source      string
-	Target      string
-	Type        string
-	ReadOnly    bool
-	Consistency string
+	Source      string // Source is the mount source path or volume name.
+	Target      string // Target is the mount destination inside the container.
+	Type        string // Type is the mount type, such as bind or volume.
+	ReadOnly    bool   // ReadOnly marks the mount as read-only.
+	Consistency string // Consistency sets the Docker mount consistency mode.
 }
 
+// ResourceLimits defines CPU and memory limits for the container.
 type ResourceLimits struct {
-	CPUQuota int64
-	Memory   string
+	CPUQuota int64  // CPUQuota is the Docker CPU quota value.
+	Memory   string // Memory is the memory limit string (e.g. "1g").
 }
 
 func defaultStartOptions() startOptions {
@@ -40,26 +43,26 @@ func defaultStartOptions() startOptions {
 	}
 }
 
-// WithConfigPath は StartDevcontainer で使用する devcontainer.json のパスを指定する。
-// 影響: 探索ではなく指定パスが優先され、読み込み対象が固定される。
-// 例:
+// WithConfigPath sets the devcontainer.json path used by StartDevcontainer.
+// Impact: The provided path is used directly instead of searching for the config.
+// Example:
 //
 //	id, err := devcontainer.StartDevcontainer(ctx, devcontainer.WithConfigPath("./.devcontainer/devcontainer.json"))
 //
-// 類似: FindConfigPath はパス探索のみで StartDevcontainer の設定は行わない。
+// Similar: FindConfigPath only searches for the file path and does not configure StartDevcontainer.
 func WithConfigPath(path string) StartOption {
 	return func(o *startOptions) {
 		o.ConfigPath = path
 	}
 }
 
-// WithEnv はコンテナの環境変数を 1 件追加する。
-// 影響: devcontainer.json の containerEnv とマージされ、同名キーは上書きされる。
-// 例:
+// WithEnv adds one container environment variable.
+// Impact: Values are merged with containerEnv and override keys with the same name.
+// Example:
 //
 //	id, err := devcontainer.StartDevcontainer(ctx, devcontainer.WithEnv("FOO", "bar"))
 //
-// 類似: WithLabel は Docker ラベルを追加する点が異なる。
+// Similar: WithLabel adds Docker labels rather than environment variables.
 func WithEnv(key, value string) StartOption {
 	return func(o *startOptions) {
 		if o.Env == nil {
@@ -69,117 +72,117 @@ func WithEnv(key, value string) StartOption {
 	}
 }
 
-// WithExtraPublish は追加のポート公開設定を追加する。
-// 影響: devcontainer.json の forwardPorts/appPort に加えて公開される。
-// 例:
+// WithExtraPublish adds an extra port publish mapping.
+// Impact: It is applied in addition to forwardPorts and appPort from devcontainer.json.
+// Example:
 //
 //	id, err := devcontainer.StartDevcontainer(ctx, devcontainer.WithExtraPublish("3000:3000"))
 //
-// 類似: forwardPorts/appPort は設定ファイル由来であり、WithExtraPublish は実行時上書き。
+// Similar: forwardPorts/appPort come from the config file, while WithExtraPublish is a runtime override.
 func WithExtraPublish(mapping string) StartOption {
 	return func(o *startOptions) {
 		o.ExtraPublish = append(o.ExtraPublish, mapping)
 	}
 }
 
-// WithExtraMount は追加のマウントを指定する。
-// 影響: ワークスペースや設定済みマウントに追加され、コンテナ作成時の HostConfig に反映される。
-// 例:
+// WithExtraMount adds an extra mount to the container configuration.
+// Impact: It is appended to workspace and configured mounts and applied to HostConfig at create time.
+// Example:
 //
 //	id, err := devcontainer.StartDevcontainer(ctx, devcontainer.WithExtraMount(devcontainer.Mount{Source: "/tmp", Target: "/work", Type: "bind"}))
 //
-// 類似: ParseMountSpec は CLI 文字列を Mount に変換するだけで、オプションには追加しない。
+// Similar: ParseMountSpec only parses CLI mount strings and does not change options.
 func WithExtraMount(m Mount) StartOption {
 	return func(o *startOptions) {
 		o.ExtraMounts = append(o.ExtraMounts, m)
 	}
 }
 
-// WithRunArg は Docker run 相当の追加引数を 1 件追加する。
-// 影響: 一部の引数(--cap-add 等)は解析され、特権やネットワーク設定に影響する。
-// 例:
+// WithRunArg appends one raw docker run argument.
+// Impact: Selected flags (such as --cap-add) are parsed and affect privilege and network settings.
+// Example:
 //
 //	id, err := devcontainer.StartDevcontainer(ctx, devcontainer.WithRunArg("--cap-add=SYS_PTRACE"))
 //
-// 類似: WithResources/WithNetwork は構造化された設定であり、WithRunArg は文字列で指定する。
+// Similar: WithResources/WithNetwork use structured input, while WithRunArg uses a raw string.
 func WithRunArg(arg string) StartOption {
 	return func(o *startOptions) {
 		o.RunArgs = append(o.RunArgs, arg)
 	}
 }
 
-// WithRemoveOnStop はコンテナ停止時に自動削除する設定を有効化する。
-// 影響: Docker の AutoRemove が true になり、停止後にコンテナが残らない。
-// 例:
+// WithRemoveOnStop enables automatic container removal when it stops.
+// Impact: Docker AutoRemove is set to true so the container is removed after stopping.
+// Example:
 //
 //	id, err := devcontainer.StartDevcontainer(ctx, devcontainer.WithRemoveOnStop())
 //
-// 類似: RemoveDevcontainer は既存コンテナを明示的に削除する点が異なる。
+// Similar: RemoveDevcontainer explicitly removes an existing container.
 func WithRemoveOnStop() StartOption {
 	return func(o *startOptions) {
 		o.RemoveOnStop = true
 	}
 }
 
-// WithDetach はコンテナをデタッチで起動するよう設定する。
-// 影響: StartDevcontainer は起動完了後すぐに戻り、コンテナ終了を待たない。
-// 例:
+// WithDetach enables detached container start.
+// Impact: StartDevcontainer returns after the container starts and does not wait for exit.
+// Example:
 //
 //	id, err := devcontainer.StartDevcontainer(ctx, devcontainer.WithDetach())
 //
-// 類似: WithDetachValue は true/false を明示でき、false なら起動後の待機を行う。
+// Similar: WithDetachValue allows explicit true/false and waits on exit when false.
 func WithDetach() StartOption {
 	return func(o *startOptions) {
 		o.Detach = true
 	}
 }
 
-// WithDetachValue はデタッチ実行の真偽値を明示的に設定する。
-// 影響: false の場合、StartDevcontainer はコンテナ終了まで待機する。
-// 例:
+// WithDetachValue sets the detached execution flag explicitly.
+// Impact: When false, StartDevcontainer waits for the container to exit.
+// Example:
 //
 //	id, err := devcontainer.StartDevcontainer(ctx, devcontainer.WithDetachValue(false))
 //
-// 類似: WithDetach は常に true を設定する簡易版。
+// Similar: WithDetach is a convenience that always sets true.
 func WithDetachValue(detach bool) StartOption {
 	return func(o *startOptions) {
 		o.Detach = detach
 	}
 }
 
-// WithTTY は TTY を割り当てる設定を有効化する。
-// 影響: コンテナ作成時の Tty が true になり、標準入出力の扱いが変わる。
-// 例:
+// WithTTY enables TTY allocation.
+// Impact: The container is created with Tty=true, which changes stdio handling.
+// Example:
 //
 //	id, err := devcontainer.StartDevcontainer(ctx, devcontainer.WithTTY())
 //
-// 類似: WithTTYValue は true/false を明示でき、false なら TTY 無しで起動する。
+// Similar: WithTTYValue allows explicit true/false and disables TTY when false.
 func WithTTY() StartOption {
 	return func(o *startOptions) {
 		o.TTY = true
 	}
 }
 
-// WithTTYValue は TTY 割り当ての真偽値を明示的に設定する。
-// 影響: false の場合、Tty が無効化される。
-// 例:
+// WithTTYValue sets the TTY allocation flag explicitly.
+// Impact: When false, Tty is disabled on the container.
+// Example:
 //
 //	id, err := devcontainer.StartDevcontainer(ctx, devcontainer.WithTTYValue(false))
 //
-// 類似: WithTTY は常に true を設定する簡易版。
+// Similar: WithTTY is a convenience that always sets true.
 func WithTTYValue(tty bool) StartOption {
 	return func(o *startOptions) {
 		o.TTY = tty
 	}
 }
 
-// WithLabel は Docker ラベルを 1 件追加する。
-// 影響: 既存ラベルとマージされ、同名キーは上書きされる。
-// 例:
+// WithLabel adds one Docker label.
+// Impact: Labels are merged and keys with the same name are overwritten.
+// Example:
 //
 //	id, err := devcontainer.StartDevcontainer(ctx, devcontainer.WithLabel("team", "dev"))
 //
-// 類似: WithEnv は環境変数であり、ラベルとは用途が異なる。
+// Similar: WithEnv adds environment variables, not labels.
 func WithLabel(key, value string) StartOption {
 	return func(o *startOptions) {
 		if o.Labels == nil {
@@ -189,52 +192,52 @@ func WithLabel(key, value string) StartOption {
 	}
 }
 
-// WithTimeout は StartDevcontainer 全体のタイムアウトを設定する。
-// 影響: タイムアウトを超えると Context がキャンセルされ、起動処理が中断される。
-// 例:
+// WithTimeout sets the overall StartDevcontainer timeout.
+// Impact: When the timeout is exceeded, the context is canceled and startup is aborted.
+// Example:
 //
 //	id, err := devcontainer.StartDevcontainer(ctx, devcontainer.WithTimeout(2*time.Minute))
 //
-// 類似: 呼び出し元で context.WithTimeout を使う方法でも同様だが、WithTimeout はオプションで一元設定する。
+// Similar: context.WithTimeout can be used by callers, but WithTimeout keeps timing in options.
 func WithTimeout(timeout time.Duration) StartOption {
 	return func(o *startOptions) {
 		o.Timeout = timeout
 	}
 }
 
-// WithResources は CPU/メモリ制限を設定する。
-// 影響: Docker HostConfig の CPUQuota/Memory が設定され、リソース制限が有効になる。
-// 例:
+// WithResources sets CPU and memory limits.
+// Impact: Docker HostConfig CPUQuota/Memory are set, enabling resource limits.
+// Example:
 //
 //	id, err := devcontainer.StartDevcontainer(ctx, devcontainer.WithResources(devcontainer.ResourceLimits{Memory: "1g"}))
 //
-// 類似: WithRunArg でも --memory などは渡せるが、WithResources は構造化された入力。
+// Similar: WithRunArg can pass --memory, but WithResources uses structured input.
 func WithResources(resources ResourceLimits) StartOption {
 	return func(o *startOptions) {
 		o.Resources = resources
 	}
 }
 
-// WithWorkdir はコンテナの作業ディレクトリを上書きする。
-// 影響: devcontainer.json の workspaceFolder より優先される。
-// 例:
+// WithWorkdir overrides the container working directory.
+// Impact: It takes precedence over workspaceFolder from devcontainer.json.
+// Example:
 //
 //	id, err := devcontainer.StartDevcontainer(ctx, devcontainer.WithWorkdir("/work"))
 //
-// 類似: 設定ファイルの workspaceFolder は静的だが、WithWorkdir は実行時指定。
+// Similar: workspaceFolder is static in the config file, while WithWorkdir is runtime.
 func WithWorkdir(path string) StartOption {
 	return func(o *startOptions) {
 		o.Workdir = path
 	}
 }
 
-// WithNetwork は使用する Docker ネットワークを指定する。
-// 影響: HostConfig.NetworkMode が設定され、既定のネットワーク解決が上書きされる。
-// 例:
+// WithNetwork sets the Docker network mode to use.
+// Impact: HostConfig.NetworkMode is set, overriding the default network resolution.
+// Example:
 //
 //	id, err := devcontainer.StartDevcontainer(ctx, devcontainer.WithNetwork("host"))
 //
-// 類似: WithRunArg の --network でも指定できるが、WithNetwork は明示 API。
+// Similar: WithRunArg can pass --network, but WithNetwork is an explicit API.
 func WithNetwork(network string) StartOption {
 	return func(o *startOptions) {
 		o.Network = network

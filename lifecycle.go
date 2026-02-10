@@ -17,40 +17,43 @@ import (
 	"github.com/docker/docker/pkg/stdcopy"
 )
 
+// LifecycleCommand represents a lifecycle hook command in shell or exec form.
 type LifecycleCommand struct {
-	Shell string
-	Exec  []string
+	Shell string   // Shell is a shell-form command string.
+	Exec  []string // Exec is an argv-style command array.
 }
 
+// NamedLifecycleCommand associates a command with a stable name.
 type NamedLifecycleCommand struct {
-	Name    string
-	Command LifecycleCommand
+	Name    string           // Name is the identifier for the command entry.
+	Command LifecycleCommand // Command is the lifecycle command payload.
 }
 
+// LifecycleCommands captures single or parallel lifecycle command definitions.
 type LifecycleCommands struct {
-	Single   *LifecycleCommand
-	Parallel []NamedLifecycleCommand
+	Single   *LifecycleCommand       // Single is the single-command form.
+	Parallel []NamedLifecycleCommand // Parallel is the named command set for parallel execution.
 }
 
-// IsZero は LifecycleCommands が未設定かどうかを判定する。
-// 影響: 状態確認のみで副作用はなく、単体/並列のどちらも空なら true になる。
-// 例:
+// IsZero reports whether LifecycleCommands is unset.
+// Impact: It is a pure check; it returns true when both the single and parallel forms are empty.
+// Example:
 //
 //	if cmds.IsZero() { /* no-op */ }
 //
-// 類似: nil チェックはポインタの有無だけを見るが、IsZero は空スライスも未設定扱いにする。
+// Similar: A nil pointer check only looks at the pointer value, while IsZero also treats empty slices as unset.
 func (c *LifecycleCommands) IsZero() bool {
 	return c == nil || (c.Single == nil && len(c.Parallel) == 0)
 }
 
-// UnmarshalJSON は LifecycleCommands に JSON の文字列/配列/オブジェクト形式のコマンドを取り込む。
-// 影響: 空値を拒否し、オブジェクト形式ではキーをソートして並列実行順を安定させる。
-// 例:
+// UnmarshalJSON loads JSON string/array/object lifecycle commands into LifecycleCommands.
+// Impact: It rejects empty values and sorts object keys to stabilize parallel execution order.
+// Example:
 //
 //	var c devcontainer.LifecycleCommands
 //	_ = json.Unmarshal([]byte(`{"postCreateCommand":"echo hi"}`), &c)
 //
-// 類似: FeatureSet の UnmarshalJSON は feature マップを解析するが、LifecycleCommands はコマンド構造に特化する。
+// Similar: FeatureSet.UnmarshalJSON parses feature maps, while LifecycleCommands focuses on command shapes.
 func (c *LifecycleCommands) UnmarshalJSON(data []byte) error {
 	if len(data) == 0 || string(data) == "null" {
 		return nil
@@ -134,9 +137,10 @@ func (c LifecycleCommand) isEmpty() bool {
 	return c.Shell == "" && len(c.Exec) == 0
 }
 
+// lifecycleHook pairs a lifecycle hook name with its command set.
 type lifecycleHook struct {
-	Name     string
-	Commands *LifecycleCommands
+	Name     string             // Name is the lifecycle hook identifier.
+	Commands *LifecycleCommands // Commands holds the commands for the hook.
 }
 
 type lifecycleRunner func(ctx context.Context, name string, command LifecycleCommand) error

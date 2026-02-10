@@ -15,19 +15,20 @@ import (
 
 type StartFunc func(context.Context, startConfig, []devcontainer.StartOption) (string, error)
 
+// startConfig holds CLI flag values for devcontainer start.
 type startConfig struct {
-	ConfigPath   string
-	Detach       bool
-	TTY          bool
-	RemoveOnStop bool
-	Timeout      time.Duration
-	Workdir      string
-	Network      string
-	Envs         []string
-	Publishes    []string
-	Mounts       []string
-	Labels       []string
-	RunArgs      []string
+	ConfigPath   string        // ConfigPath is the devcontainer.json path override.
+	Detach       bool          // Detach controls whether to run in the background.
+	TTY          bool          // TTY controls whether to allocate a TTY.
+	RemoveOnStop bool          // RemoveOnStop removes the container when it stops.
+	Timeout      time.Duration // Timeout sets the start operation deadline.
+	Workdir      string        // Workdir overrides the container working directory.
+	Network      string        // Network overrides the container network mode.
+	Envs         []string      // Envs holds extra KEY=VALUE environment variables.
+	Publishes    []string      // Publishes holds extra port publish mappings.
+	Mounts       []string      // Mounts holds extra Docker --mount specs.
+	Labels       []string      // Labels holds extra Docker labels.
+	RunArgs      []string      // RunArgs holds extra docker run arguments.
 }
 
 var errUsage = errors.New("usage error")

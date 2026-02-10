@@ -312,13 +312,13 @@ func parseMountString(spec string) (mount.Mount, error) {
 	return result, nil
 }
 
-// ParseMountSpec は Docker の --mount 文字列を Mount に変換する。
-// 影響: 文字列を検証し、必須項目が欠ける場合はエラーとなる。
-// 例:
+// ParseMountSpec converts a Docker --mount string into a Mount.
+// Impact: It validates the string and returns an error when required fields are missing.
+// Example:
 //
 //	m, err := devcontainer.ParseMountSpec("type=bind,source=/tmp,target=/work")
 //
-// 類似: MountSpec の UnmarshalJSON は devcontainer.json の mount 設定を読むためのもので、CLI 文字列を直接扱わない。
+// Similar: MountSpec.UnmarshalJSON parses devcontainer.json mounts rather than CLI strings.
 func ParseMountSpec(spec string) (Mount, error) {
 	parsed, err := parseMountString(spec)
 	if err != nil {
@@ -364,14 +364,15 @@ func toDockerMount(m Mount) (mount.Mount, error) {
 	}, nil
 }
 
+// runArgOptions captures parsed docker run arguments.
 type runArgOptions struct {
-	CapAdd      []string
-	SecurityOpt []string
-	Privileged  bool
-	Init        bool
-	User        string
-	Network     string
-	Labels      map[string]string
+	CapAdd      []string          // CapAdd holds added Linux capabilities.
+	SecurityOpt []string          // SecurityOpt holds security options.
+	Privileged  bool              // Privileged indicates --privileged was set.
+	Init        bool              // Init indicates --init was set.
+	User        string            // User is the requested user override.
+	Network     string            // Network is the requested network mode.
+	Labels      map[string]string // Labels holds parsed Docker labels.
 }
 
 func parseRunArgs(args []string) (runArgOptions, error) {
